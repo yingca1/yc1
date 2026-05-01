@@ -1,0 +1,13 @@
+# curl configuration.
+name: curl
+description: curl configuration
+files:
+  - source: curlrc
+    target: ~/.curlrc
+dependencies:
+  - name: curl
+    check:
+      command: curl
+    install:
+      darwin: brew install curl
+      linux: sudo apt-get update && sudo apt-get install -y curl

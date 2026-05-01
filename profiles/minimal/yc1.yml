@@ -1,0 +1,7 @@
+# Minimal shared yc1 profile.
+version: 1
+
+configs:
+  - git
+  - curl
+  - wget

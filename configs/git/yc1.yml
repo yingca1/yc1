@@ -1,0 +1,13 @@
+# Git configuration.
+name: git
+description: git configuration
+files:
+  - source: gitconfig
+    target: ~/.gitconfig
+dependencies:
+  - name: git
+    check:
+      command: git
+    install:
+      darwin: brew install git
+      linux: sudo apt-get update && sudo apt-get install -y git

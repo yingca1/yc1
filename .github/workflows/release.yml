@@ -1,0 +1,62 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+
+  build:
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+      - name: Build yc1
+        working-directory: cli
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" -o dist/yc1 ./cmd/yc1
+          tar -C dist -czf "../yc1_${GOOS}_${GOARCH}.tar.gz" yc1
+          cd ..
+          sha256sum "yc1_${GOOS}_${GOARCH}.tar.gz" > "yc1_${GOOS}_${GOARCH}.tar.gz.sha256"
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" \
+            "yc1_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz" \
+            "yc1_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz.sha256" \
+            --clobber

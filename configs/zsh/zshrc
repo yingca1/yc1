@@ -102,5 +102,6 @@ export LANG=en_US.UTF-8
 
 
 # Local config
-[[ -f ~/.zshrc.local ]] && source ~/.zshrc.local
+YC1_ROOT="${YC1_ROOT:-$HOME/.config/yc1}"
+[[ -f "$YC1_ROOT/local/zsh/zshrc.local" ]] && source "$YC1_ROOT/local/zsh/zshrc.local"
 export PATH="/usr/local/sbin:$PATH"

@@ -23,3 +23,11 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# Local build artifacts
+dist/
+/yc1
+/cli/yc1
+
+# Local machine yc1 profiles
+/_profiles/

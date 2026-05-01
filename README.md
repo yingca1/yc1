@@ -1,12 +1,91 @@
-# dotfiles
+# yc1
 
-Environment configuration for tmux + vim + zsh on macOS & Linux, keeping it simple and easy to expand.
+Personal development environment manager for configs, profiles, and agent skills
+on macOS and Linux.
 
 ## Installation
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/yingca1/dotfiles/master/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/yingca1/yc1/main/install.sh)"
 ```
+
+This installs the `yc1` command to `~/.local/bin/yc1`. It does not install
+configuration files or dependencies automatically.
+
+## yc1
+
+`yc1` manages configs, profiles, and agent skills
+from `~/.config/yc1`:
+
+- `~/.config/yc1/source`: the git-managed yc1 source
+- `~/.config/yc1/state`: install state for configs and skills
+- `~/.config/yc1/backups`: backups created before replacing existing files
+- `~/.config/yc1/local`: local overrides sourced by managed configs
+- `~/.config/yc1/source/profiles`: committed, shared profile definitions
+- `~/.config/yc1/source/_profiles`: local profile definitions ignored by git
+
+Common commands:
+
+```bash
+yc1 up -p default       # install the built-in default profile
+yc1 up -p minimal       # install git/curl/wget only
+yc1 up -f yc1.yml       # install configs and skills from a profile file
+yc1 config up vim       # install selected config resources
+yc1 config up vim --copy
+yc1 skill up my-skill   # link a skill declared in ./yc1.yml
+yc1 status -f yc1.yml
+yc1 pull                # update ~/.config/yc1/source
+yc1 update              # update the yc1 binary from GitHub Releases
+```
+
+Configs are organized by tool: `zsh`, `vim`, `tmux`, `kitty`, `git`, `curl`, and
+`wget`.
+
+Each config is driven by a `configs/<name>/yc1.yml` manifest. YAML is used so notes and
+comments can live next to file mappings, OS-specific targets, and dependency
+commands.
+
+Profile files use the same name at the top level:
+
+```yaml
+version: 1
+vars:
+  proj_skills: ~/Code/workspace/proj/skills
+  agents_project_target: .agents/skills
+  claude_project_target: .claude/skills
+configs:
+  - git
+  - vim
+skills:
+  - name: proj-onboarding
+    source: ${vars.proj_skills}
+    targets:
+      - ${vars.agents_project_target}
+      - ${vars.claude_project_target}
+```
+
+For skills, `source` is the skills root and yc1 links `<source>/<name>`.
+Targets are install directory paths. Relative target paths are resolved from the
+profile file directory, and status/state labels are derived from the target path.
+Use top-level `vars` and `${vars.name}` references to reuse source roots and
+target directories inside skill definitions.
+
+Named profiles use `yc1 up/down/status -p <name>`. Resolution checks local
+profiles first, then shared profiles, then the hardcoded `minimal` and `default`
+fallbacks:
+
+1. `~/.config/yc1/source/_profiles/<name>/yc1.yml`
+2. `~/.config/yc1/source/profiles/<name>/yc1.yml`
+3. built-in fallback for `minimal` and `default`
+
+This lets each machine keep private choices in `_profiles/` while shared
+profiles stay committed in `profiles/`.
+
+Bare `yc1 up/down/status` reads `./yc1.yml`. If the current directory does not
+have one, pass `-f` or `-p`.
+
+`yc1 up` installs dependencies only for the configs being activated. `yc1 down`
+removes managed configuration files and restores backups, but does not uninstall software dependencies.
 
 ## How to use
 
@@ -28,7 +107,7 @@ You can adjust the size of the smaller panes in `tmux.conf` by lowering or incre
 
 ### kitty
 
-On macOS, the install script installs kitty with Homebrew Cask and writes:
+The `kitty` config writes:
 
 - `~/.config/kitty/kitty.conf`
 - `~/.config/kitty/current-theme.conf`

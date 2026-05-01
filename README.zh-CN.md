@@ -1,12 +1,84 @@
-# dotfiles
+# yc1
 
-macOS和Linux上的tmux + vim + zsh的环境配置，保持简单易扩展。
+个人开发环境管理工具，用于管理 configs、profiles 和 agent skills，支持 macOS 和 Linux。
 
 ## 安装
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/yingca1/dotfiles/master/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/yingca1/yc1/main/install.sh)"
 ```
+
+这只会把 `yc1` 命令安装到 `~/.local/bin/yc1`，不会自动安装配置文件或依赖。
+
+## yc1
+
+`yc1` 使用 `~/.config/yc1` 管理 configs、profiles 和 agent skills：
+
+- `~/.config/yc1/source`：git 管理的 yc1 源码
+- `~/.config/yc1/state`：configs 和 skills 的安装状态
+- `~/.config/yc1/backups`：替换已有文件前创建的备份
+- `~/.config/yc1/local`：被托管配置读取的本地覆盖配置
+- `~/.config/yc1/source/profiles`：提交到仓库、可共享的 profiles
+- `~/.config/yc1/source/_profiles`：本机私有、被 git ignore 的 profiles
+
+常用命令：
+
+```bash
+yc1 up -p default       # 安装内置 default profile
+yc1 up -p minimal       # 只安装 git/curl/wget
+yc1 up -f yc1.yml       # 从 profile 文件安装 configs 和 skills
+yc1 config up vim       # 安装指定 config
+yc1 config up vim --copy
+yc1 skill up my-skill   # 链接 ./yc1.yml 中声明的 skill
+yc1 status -f yc1.yml
+yc1 pull                # 更新 ~/.config/yc1/source
+yc1 update              # 从 GitHub Releases 更新 yc1 二进制
+```
+
+configs 按工具组织：`zsh`、`vim`、`tmux`、`kitty`、`git`、`curl`、`wget`。
+
+每个 config 由 `configs/<name>/yc1.yml` manifest 驱动。使用 YAML 是为了能把说明和注释
+直接写在文件映射、OS 条件和依赖命令旁边。
+
+profile 文件也使用顶层 `yc1.yml`：
+
+```yaml
+version: 1
+vars:
+  proj_skills: ~/Code/workspace/proj/skills
+  agents_project_target: .agents/skills
+  claude_project_target: .claude/skills
+configs:
+  - git
+  - vim
+skills:
+  - name: proj-onboarding
+    source: ${vars.proj_skills}
+    targets:
+      - ${vars.agents_project_target}
+      - ${vars.claude_project_target}
+```
+
+对于 skills，`source` 表示 skills 根目录，yc1 会链接 `<source>/<name>`。
+targets 是实际安装目录路径。相对 target path 会按 profile 文件所在目录解析，
+status/state 的标识会从 target path 派生。可以用顶层 `vars` 和 `${vars.name}`
+引用复用 skill source root 和 target 目录。
+
+命名 profile 使用 `yc1 up/down/status -p <name>`。解析顺序是本地优先、
+共享其次，最后只对 `minimal` 和 `default` 使用硬编码兜底：
+
+1. `~/.config/yc1/source/_profiles/<name>/yc1.yml`
+2. `~/.config/yc1/source/profiles/<name>/yc1.yml`
+3. `minimal` 和 `default` 的内置兜底
+
+这样每台机器可以把自己的选择放在 `_profiles/`，而通用配置继续放在
+`profiles/` 里提交和共享。
+
+裸 `yc1 up/down/status` 会读取当前目录的 `./yc1.yml`。如果当前目录没有该文件，
+需要传 `-f` 或 `-p`。
+
+`yc1 up` 只会安装当前激活 config 所需的依赖。`yc1 down` 会移除托管配置并恢复备份，
+但不会卸载软件依赖。
 
 ## 如何使用
 
@@ -28,7 +100,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/yingca1/dotfiles/master/
 
 ### kitty
 
-在 macOS 上，安装脚本会通过 Homebrew Cask 安装 kitty，并写入：
+`kitty` config 会写入：
 
 - `~/.config/kitty/kitty.conf`
 - `~/.config/kitty/current-theme.conf`

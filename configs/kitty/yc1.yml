@@ -1,0 +1,15 @@
+# Kitty terminal configuration.
+name: kitty
+description: kitty terminal configuration
+files:
+  - source: kitty.conf
+    target: ~/.config/kitty/kitty.conf
+  - source: current-theme.conf
+    target: ~/.config/kitty/current-theme.conf
+dependencies:
+  - name: kitty
+    check:
+      command: kitty
+    install:
+      darwin: brew install --cask kitty
+      linux: sudo apt-get update && sudo apt-get install -y kitty

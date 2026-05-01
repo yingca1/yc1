@@ -131,4 +131,4 @@ set-window-option -g allow-rename off
 set -g update-environment "SSH_AUTH_SOCK"
 
 # Source a local configuration file if it exists
-if-shell "[ -f ~/.tmux.conf.local ]" 'source-file ~/.tmux.conf.local'
+if-shell "[ -f ~/.config/yc1/local/tmux/tmux.conf.local ]" 'source-file ~/.config/yc1/local/tmux/tmux.conf.local'

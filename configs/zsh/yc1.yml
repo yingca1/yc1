@@ -1,0 +1,59 @@
+# zsh and oh-my-zsh configuration.
+name: zsh
+description: zsh and oh-my-zsh configuration
+files:
+  - source: zshrc
+    target: ~/.zshrc
+  - source: yc.zsh-theme
+    target: ~/.oh-my-zsh/themes/yc.zsh-theme
+local_files:
+  - zshrc.local
+dependencies:
+  - name: zsh
+    check:
+      command: zsh
+    install:
+      darwin: brew install zsh
+      linux: sudo apt-get update && sudo apt-get install -y zsh
+  - name: git
+    check:
+      command: git
+    install:
+      darwin: brew install git
+      linux: sudo apt-get update && sudo apt-get install -y git
+  - name: curl
+    check:
+      command: curl
+    install:
+      darwin: brew install curl
+      linux: sudo apt-get update && sudo apt-get install -y curl
+  - name: oh-my-zsh
+    check:
+      path: ~/.oh-my-zsh/oh-my-zsh.sh
+    install:
+      darwin: RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+      linux: RUNZSH=no CHSH=no KEEP_ZSHRC=yes sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+  - name: zsh-completions
+    check:
+      path: ~/.oh-my-zsh/custom/plugins/zsh-completions
+    install:
+      darwin: git clone https://github.com/zsh-users/zsh-completions ~/.oh-my-zsh/custom/plugins/zsh-completions
+      linux: git clone https://github.com/zsh-users/zsh-completions ~/.oh-my-zsh/custom/plugins/zsh-completions
+  - name: zsh-autosuggestions
+    check:
+      path: ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+    install:
+      darwin: git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+      linux: git clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+  - name: zsh-syntax-highlighting
+    check:
+      path: ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+    install:
+      darwin: git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+      linux: git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+  - name: zsh-history-substring-search
+    check:
+      path: ~/.oh-my-zsh/custom/plugins/zsh-history-substring-search
+    install:
+      darwin: git clone https://github.com/zsh-users/zsh-history-substring-search ~/.oh-my-zsh/custom/plugins/zsh-history-substring-search
+      linux: git clone https://github.com/zsh-users/zsh-history-substring-search ~/.oh-my-zsh/custom/plugins/zsh-history-substring-search

@@ -1,0 +1,11 @@
+# Default shared yc1 profile.
+version: 1
+
+configs:
+  - curl
+  - git
+  - kitty
+  - tmux
+  - vim
+  - wget
+  - zsh

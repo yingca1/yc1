@@ -1,0 +1,13 @@
+# wget configuration.
+name: wget
+description: wget configuration
+files:
+  - source: wgetrc
+    target: ~/.wgetrc
+dependencies:
+  - name: wget
+    check:
+      command: wget
+    install:
+      darwin: brew install wget
+      linux: sudo apt-get update && sudo apt-get install -y wget

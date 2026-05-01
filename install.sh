@@ -1,106 +1,66 @@
-#!/bin/bash
+#!/usr/bin/env sh
+set -eu
 
-cd "${HOME}"
+YC1_REPO="${YC1_REPO:-yingca1/yc1}"
+YC1_VERSION="${YC1_VERSION:-latest}"
+YC1_INSTALL_DIR="${YC1_INSTALL_DIR:-$HOME/.local/bin}"
 
-DOTFILE_TMPL_BASE_URL=https://raw.githubusercontent.com/yingca1/dotfiles/master
-DOTFILE_BACKUP_FOLDER="${HOME}"/dotfile_backup_$(date +%Y%m%d%H%M%S)
+detect_os() {
+  case "$(uname -s)" in
+    Darwin) printf '%s\n' darwin ;;
+    Linux) printf '%s\n' linux ;;
+    *) printf 'unsupported OS: %s\n' "$(uname -s)" >&2; exit 1 ;;
+  esac
+}
 
-# list all dotfiles in an array
-declare -a DOTFILES=(
-    .gitconfig
-    .vimrc
-    .vimrc.plugins
-    .zshrc
-    .curlrc
-    .wgetrc
-)
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64 | amd64) printf '%s\n' amd64 ;;
+    arm64 | aarch64) printf '%s\n' arm64 ;;
+    *) printf 'unsupported architecture: %s\n' "$(uname -m)" >&2; exit 1 ;;
+  esac
+}
 
-# backup existing dotfiles
-mkdir -p "${DOTFILE_BACKUP_FOLDER}"
-for dotfile in "${DOTFILES[@]}"; do
-    if [ -f "${HOME}"/"${dotfile}" ]; then
-        mv "${HOME}"/"${dotfile}" "${DOTFILE_BACKUP_FOLDER}"/
-    fi
-done
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
 
-if [ -f "${HOME}"/.oh-my-zsh ]; then
-    mv "${HOME}"/.oh-my-zsh "${DOTFILE_BACKUP_FOLDER}"/
+os="$(detect_os)"
+arch="$(detect_arch)"
+asset="yc1_${os}_${arch}.tar.gz"
+
+if [ "$YC1_VERSION" = "latest" ]; then
+  base_url="https://github.com/${YC1_REPO}/releases/latest/download"
+else
+  base_url="https://github.com/${YC1_REPO}/releases/download/${YC1_VERSION}"
 fi
 
-if [ -f "${HOME}"/.vim ]; then
-    mv "${HOME}"/.vim "${DOTFILE_BACKUP_FOLDER}"/
+tmp_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_dir"' EXIT INT TERM
+
+archive="$tmp_dir/$asset"
+checksum="$tmp_dir/$asset.sha256"
+
+curl -fsSL "$base_url/$asset" -o "$archive"
+curl -fsSL "$base_url/$asset.sha256" -o "$checksum"
+
+expected="$(awk '{print $1}' "$checksum")"
+actual="$(sha256_file "$archive")"
+if [ "$expected" != "$actual" ]; then
+  printf 'yc1: checksum mismatch for %s\n' "$asset" >&2
+  exit 1
 fi
 
-if [ ! -f /bin/zsh ]; then
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        sudo apt-get update && sudo apt-get install zsh -y
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        brew install zsh
-    fi
-fi
+tar -xzf "$archive" -C "$tmp_dir"
+mkdir -p "$YC1_INSTALL_DIR"
+install -m 0755 "$tmp_dir/yc1" "$YC1_INSTALL_DIR/yc1"
 
-
-# install oh-my-zsh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-
-# install zsh-completions
-git clone https://github.com/zsh-users/zsh-completions ${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions
-
-# install zsh-autosuggestions
-git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-
-# install zsh-syntax-highlighting
-git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
-
-# install zsh-history-substring-search
-git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
-
-# install zsh-theme
-curl -fLo "${HOME}"/.oh-my-zsh/themes/yc.zsh-theme --create-dirs \
-    "${DOTFILE_TMPL_BASE_URL}"/yc.zsh-theme
-
-# install plug.vim
-curl -fLo ~/.vim/autoload/plug.vim --create-dirs \
-    https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-
-# for loop download remote dotfiles
-for dotfile in "${DOTFILES[@]}"; do
-    curl -fLo "${HOME}"/"${dotfile}" --create-dirs \
-        "${DOTFILE_TMPL_BASE_URL}"/"${dotfile}"
-done
-
-# install tmux
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    sudo apt-get update && sudo apt-get install tmux -y
-
-    curl -fLo "${HOME}"/.tmux.conf --create-dirs \
-        "${DOTFILE_TMPL_BASE_URL}"/.tmux.conf.linux
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    brew install tmux
-
-    curl -fLo "${HOME}"/.tmux.conf --create-dirs \
-        "${DOTFILE_TMPL_BASE_URL}"/.tmux.conf.macOS
-
-    if ! command -v kitty >/dev/null 2>&1 && [ ! -d /Applications/kitty.app ]; then
-        brew install --cask kitty
-    fi
-
-    curl -fLo "${HOME}"/.config/kitty/kitty.conf --create-dirs \
-        "${DOTFILE_TMPL_BASE_URL}"/kitty/kitty.conf
-    curl -fLo "${HOME}"/.config/kitty/current-theme.conf --create-dirs \
-        "${DOTFILE_TMPL_BASE_URL}"/kitty/current-theme.conf
-fi
-touch ~/.tmux.conf.local
-
-# install vim plugins
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    sudo apt-get update && sudo apt-get install ripgrep bat fd-find silversearcher-ag fzf -y
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    brew install ripgrep bat fd the_silver_searcher fzf
-fi
-
-VIMRC=${HOME}/.vimrc
-
-touch ~/.vimrc.plugins.local
-
-vim -E -s -u "$VIMRC" +PlugInstall +qall
+printf 'yc1 installed to %s\n' "$YC1_INSTALL_DIR/yc1"
+case ":$PATH:" in
+  *":$YC1_INSTALL_DIR:"*) ;;
+  *) printf 'Add %s to PATH to run yc1 from any shell.\n' "$YC1_INSTALL_DIR" ;;
+esac

@@ -1,0 +1,32 @@
+# Vim configuration and plugin list.
+name: vim
+description: vim configuration and plugin list
+files:
+  - source: vimrc
+    target: ~/.vimrc
+  - source: vimrc.plugins
+    target: ~/.vimrc.plugins
+  - source: vimrc.plugins.optional
+    target: ~/.vimrc.plugins.optional
+local_files:
+  - vimrc.local
+  - vimrc.plugins.local
+dependencies:
+  - name: vim
+    check:
+      command: vim
+    install:
+      darwin: brew install vim
+      linux: sudo apt-get update && sudo apt-get install -y vim
+  - name: vim-plug
+    check:
+      path: ~/.vim/autoload/plug.vim
+    install:
+      darwin: curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+      linux: curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
+  - name: vim-search-tools
+    check:
+      command: rg
+    install:
+      darwin: brew install ripgrep bat fd the_silver_searcher fzf
+      linux: sudo apt-get update && sudo apt-get install -y ripgrep bat fd-find silversearcher-ag fzf
