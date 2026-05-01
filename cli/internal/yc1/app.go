@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -84,8 +85,22 @@ type Dependency struct {
 }
 
 type DependencyCheck struct {
-	Command string `json:"command" yaml:"command"`
-	Path    string `json:"path" yaml:"path"`
+	Command  string   `json:"command" yaml:"command"`
+	Commands []string `json:"commands" yaml:"commands"`
+	Path     string   `json:"path" yaml:"path"`
+	Paths    []string `json:"paths" yaml:"paths"`
+	Probe    string   `json:"probe" yaml:"probe"`
+	Probes   []string `json:"probes" yaml:"probes"`
+}
+
+type dependencyCheckCandidate struct {
+	Kind  string
+	Value string
+}
+
+type dependencyCheckStatus struct {
+	State string
+	Lines []string
 }
 
 type ConfigState struct {
@@ -250,7 +265,9 @@ func (a *App) runProfileAction(action string, args []string) error {
 		if len(selection.Profile.Configs) > 0 {
 			fmt.Fprintln(a.Out, "Configs")
 			for _, name := range selection.Profile.Configs {
-				fmt.Fprintln(a.Out, "  "+a.configStatus(name))
+				for _, line := range a.configStatusLines(name) {
+					fmt.Fprintln(a.Out, "  "+line)
+				}
 			}
 		}
 		if len(selection.Profile.Skills) > 0 {
@@ -293,7 +310,9 @@ func (a *App) runConfigCommand(args []string) error {
 		return a.downConfigs(names)
 	case "status":
 		for _, name := range names {
-			fmt.Fprintln(a.Out, a.configStatus(name))
+			for _, line := range a.configStatusLines(name) {
+				fmt.Fprintln(a.Out, line)
+			}
 		}
 		return nil
 	default:
@@ -750,26 +769,130 @@ func (a *App) installDependencies(manifest ConfigManifest) error {
 }
 
 func dependencySatisfied(dep Dependency) (bool, error) {
-	if dep.Check.Command != "" {
-		_, err := exec.LookPath(dep.Check.Command)
-		if err == nil {
-			return true, nil
-		}
-		if errors.Is(err, exec.ErrNotFound) {
-			return false, nil
-		}
-		return false, err
+	candidates := dependencyCheckCandidates(dep.Check)
+	if len(candidates) == 0 {
+		return true, nil
 	}
-	if dep.Check.Path != "" {
-		path, err := expandPath(dep.Check.Path)
+	for _, candidate := range candidates {
+		ok, _, err := dependencyCheckCandidateSatisfied(candidate)
 		if err != nil {
 			return false, err
 		}
-		_, err = os.Stat(path)
-		if err == nil {
+		if ok {
 			return true, nil
 		}
-		if errors.Is(err, os.ErrNotExist) {
+	}
+	return false, nil
+}
+
+func dependencyCheckCandidates(check DependencyCheck) []dependencyCheckCandidate {
+	var candidates []dependencyCheckCandidate
+	if check.Command != "" {
+		candidates = append(candidates, dependencyCheckCandidate{Kind: "command", Value: check.Command})
+	}
+	for _, command := range check.Commands {
+		if command != "" {
+			candidates = append(candidates, dependencyCheckCandidate{Kind: "command", Value: command})
+		}
+	}
+	if check.Probe != "" {
+		candidates = append(candidates, dependencyCheckCandidate{Kind: "probe", Value: check.Probe})
+	}
+	for _, probe := range check.Probes {
+		if probe != "" {
+			candidates = append(candidates, dependencyCheckCandidate{Kind: "probe", Value: probe})
+		}
+	}
+	if check.Path != "" {
+		candidates = append(candidates, dependencyCheckCandidate{Kind: "path", Value: check.Path})
+	}
+	for _, path := range check.Paths {
+		if path != "" {
+			candidates = append(candidates, dependencyCheckCandidate{Kind: "path", Value: path})
+		}
+	}
+	return candidates
+}
+
+func dependencyCheckCandidateSatisfied(candidate dependencyCheckCandidate) (bool, string, error) {
+	switch candidate.Kind {
+	case "command":
+		if _, err := exec.LookPath(candidate.Value); err != nil {
+			if errors.Is(err, exec.ErrNotFound) {
+				return false, "not found", nil
+			}
+			return false, "", err
+		}
+		return true, "found", nil
+	case "probe":
+		ok, err := dependencyProbeSatisfied(candidate.Value)
+		if err != nil {
+			return false, "", err
+		}
+		if !ok {
+			return false, "failed", nil
+		}
+		return true, "passed", nil
+	case "path":
+		path, err := expandPath(candidate.Value)
+		if err != nil {
+			return false, "", err
+		}
+		if _, err := os.Stat(path); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return false, "missing", nil
+			}
+			return false, "", err
+		}
+		return true, "exists", nil
+	default:
+		return false, "", fmt.Errorf("unknown dependency check kind %q", candidate.Kind)
+	}
+}
+
+func dependencyCheckStatusLines(dep Dependency) dependencyCheckStatus {
+	candidates := dependencyCheckCandidates(dep.Check)
+	if len(candidates) == 0 {
+		return dependencyCheckStatus{
+			State: "ok",
+			Lines: []string{fmt.Sprintf("check/%s: ok (no checks)", dep.Name)},
+		}
+	}
+	var failures []string
+	for _, candidate := range candidates {
+		ok, detail, err := dependencyCheckCandidateSatisfied(candidate)
+		label := fmt.Sprintf("%s: %s", candidate.Kind, candidate.Value)
+		if err != nil {
+			return dependencyCheckStatus{
+				State: "error",
+				Lines: []string{fmt.Sprintf("check/%s: error (%s: %v)", dep.Name, label, err)},
+			}
+		}
+		if ok {
+			return dependencyCheckStatus{
+				State: "ok",
+				Lines: []string{fmt.Sprintf("check/%s: ok (%s)", dep.Name, label)},
+			}
+		}
+		failures = append(failures, fmt.Sprintf("  %s -> %s", label, detail))
+	}
+	lines := []string{fmt.Sprintf("check/%s: missing", dep.Name)}
+	lines = append(lines, failures...)
+	return dependencyCheckStatus{State: "missing", Lines: lines}
+}
+
+func dependencyProbeSatisfied(probe string) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", probe)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	if err := cmd.Run(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return false, nil
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			return false, nil
 		}
 		return false, err
@@ -954,25 +1077,38 @@ func (a *App) deactivateConfig(state ConfigState) error {
 }
 
 func (a *App) configStatus(name string) string {
+	lines := a.configStatusLines(name)
+	if len(lines) == 0 {
+		return fmt.Sprintf("config/%s: unknown", name)
+	}
+	return lines[0]
+}
+
+func (a *App) configStatusLines(name string) []string {
 	state, stateErr := a.readConfigState(name)
 	manifest, manifestErr := a.loadConfigManifest(name)
 	missingDeps := []string{}
+	checkLines := []string{}
 	if manifestErr == nil {
 		for _, dep := range manifest.Dependencies {
-			ok, err := dependencySatisfied(dep)
-			if err == nil && !ok {
+			status := dependencyCheckStatusLines(dep)
+			checkLines = append(checkLines, status.Lines...)
+			if status.State == "missing" {
 				missingDeps = append(missingDeps, dep.Name)
 			}
 		}
 	}
+	statusLine := ""
 	if stateErr != nil {
 		if manifestErr != nil {
-			return fmt.Sprintf("config/%s: missing-source", name)
+			return []string{fmt.Sprintf("config/%s: missing-source", name)}
 		}
 		if len(missingDeps) > 0 {
-			return fmt.Sprintf("config/%s: blocked (missing: %s)", name, strings.Join(missingDeps, ", "))
+			statusLine = fmt.Sprintf("config/%s: blocked (missing: %s)", name, strings.Join(missingDeps, ", "))
+		} else {
+			statusLine = fmt.Sprintf("config/%s: down", name)
 		}
-		return fmt.Sprintf("config/%s: down", name)
+		return append([]string{statusLine}, checkLines...)
 	}
 
 	stateByTarget := map[string]FileState{}
@@ -1025,15 +1161,15 @@ func (a *App) configStatus(name string) string {
 		}
 	}
 	if drifted {
-		return fmt.Sprintf("config/%s: drifted", name)
+		statusLine = fmt.Sprintf("config/%s: drifted", name)
+	} else if partial {
+		statusLine = fmt.Sprintf("config/%s: partial", name)
+	} else if len(missingDeps) > 0 {
+		statusLine = fmt.Sprintf("config/%s: blocked (missing: %s)", name, strings.Join(missingDeps, ", "))
+	} else {
+		statusLine = fmt.Sprintf("config/%s: up (%s)", name, state.Mode)
 	}
-	if partial {
-		return fmt.Sprintf("config/%s: partial", name)
-	}
-	if len(missingDeps) > 0 {
-		return fmt.Sprintf("config/%s: blocked (missing: %s)", name, strings.Join(missingDeps, ", "))
-	}
-	return fmt.Sprintf("config/%s: up (%s)", name, state.Mode)
+	return append([]string{statusLine}, checkLines...)
 }
 
 func (a *App) upSkill(ref SkillRef, baseDir string) error {

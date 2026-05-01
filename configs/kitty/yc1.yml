@@ -7,9 +7,21 @@ files:
   - source: current-theme.conf
     target: ~/.config/kitty/current-theme.conf
 dependencies:
+  - name: curl
+    check:
+      command: curl
+    install:
+      darwin: brew install curl
+      linux: sudo apt-get update && sudo apt-get install -y curl
   - name: kitty
     check:
-      command: kitty
+      probes:
+        - kitty --version
+        - /Applications/kitty.app/Contents/MacOS/kitty --version
+        - ~/.local/kitty.app/bin/kitty --version
+      paths:
+        - /Applications/kitty.app
+        - ~/.local/kitty.app
     install:
-      darwin: brew install --cask kitty
-      linux: sudo apt-get update && sudo apt-get install -y kitty
+      darwin: 'curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin launch=n'
+      linux: 'curl -fsSL https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin launch=n'

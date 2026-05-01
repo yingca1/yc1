@@ -18,15 +18,49 @@ dependencies:
     install:
       darwin: brew install vim
       linux: sudo apt-get update && sudo apt-get install -y vim
+  - name: curl
+    check:
+      command: curl
+    install:
+      darwin: brew install curl
+      linux: sudo apt-get update && sudo apt-get install -y curl
   - name: vim-plug
     check:
       path: ~/.vim/autoload/plug.vim
     install:
       darwin: curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
       linux: curl -fLo ~/.vim/autoload/plug.vim --create-dirs https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim
-  - name: vim-search-tools
+  - name: ripgrep
     check:
       command: rg
     install:
-      darwin: brew install ripgrep bat fd the_silver_searcher fzf
-      linux: sudo apt-get update && sudo apt-get install -y ripgrep bat fd-find silversearcher-ag fzf
+      darwin: brew install ripgrep
+      linux: sudo apt-get update && sudo apt-get install -y ripgrep
+  - name: bat
+    check:
+      commands:
+        - bat
+        - batcat
+    install:
+      darwin: brew install bat
+      linux: sudo apt-get update && sudo apt-get install -y bat
+  - name: fd
+    check:
+      commands:
+        - fd
+        - fdfind
+    install:
+      darwin: brew install fd
+      linux: sudo apt-get update && sudo apt-get install -y fd-find
+  - name: the-silver-searcher
+    check:
+      command: ag
+    install:
+      darwin: brew install the_silver_searcher
+      linux: sudo apt-get update && sudo apt-get install -y silversearcher-ag
+  - name: fzf
+    check:
+      command: fzf
+    install:
+      darwin: brew install fzf
+      linux: sudo apt-get update && sudo apt-get install -y fzf

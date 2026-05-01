@@ -84,8 +84,14 @@ profiles stay committed in `profiles/`.
 Bare `yc1 up/down/status` reads `./yc1.yml`. If the current directory does not
 have one, pass `-f` or `-p`.
 
-`yc1 up` installs dependencies only for the configs being activated. `yc1 down`
-removes managed configuration files and restores backups, but does not uninstall software dependencies.
+`yc1 up` installs dependencies only for the configs being activated. Dependency
+checks pass when any declared `command`, `commands`, `path`, `paths`, `probe`,
+or `probes` entry succeeds. `command` checks look in `PATH`, `path` checks look
+on disk, and `probe` checks run a non-interactive shell command that must exit
+successfully. This lets manifests recognize software installed outside the
+package manager. `yc1 config status` prints the dependency check result below
+the config summary. `yc1 down` removes managed configuration files and restores
+backups, but does not uninstall software dependencies.
 
 ## How to use
 

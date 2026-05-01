@@ -88,6 +88,49 @@ func TestConfigCopyModeDetectsDriftAndDownBacksUpChangedFile(t *testing.T) {
 	}
 }
 
+func TestConfigStatusPrintsDependencyCheckResults(t *testing.T) {
+	app, _ := newTestApp(t)
+	configDir := filepath.Join(app.Root, "source", "configs", "demo")
+	presentPath := filepath.Join(t.TempDir(), "present-tool")
+	writeFile(t, filepath.Join(configDir, "demo.conf"), "managed\n")
+	writeFile(t, presentPath, "installed\n")
+	writeFile(t, filepath.Join(configDir, "yc1.yml"), `name: demo
+files:
+  - source: demo.conf
+    target: ~/.demorc
+dependencies:
+  - name: present-tool
+    check:
+      paths:
+        - `+presentPath+`
+    install:
+      darwin: true
+      linux: true
+  - name: missing-tool
+    check:
+      command: yc1-missing-tool
+    install:
+      darwin: true
+      linux: true
+`)
+	t.Setenv("PATH", t.TempDir())
+
+	if code := app.Run([]string{"config", "status", "demo"}); code != 0 {
+		t.Fatalf("config status returned %d: %s", code, app.Err.(*bytes.Buffer).String())
+	}
+	got := app.Out.(*bytes.Buffer).String()
+	for _, want := range []string{
+		"config/demo: blocked (missing: missing-tool)",
+		"check/present-tool: ok (path: " + presentPath + ")",
+		"check/missing-tool: missing",
+		"command: yc1-missing-tool -> not found",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestConfigUpClonesSourceWhenMissing(t *testing.T) {
 	temp := t.TempDir()
 	home := filepath.Join(temp, "home")
@@ -488,6 +531,150 @@ skills:
 	}
 	if got := app.Err.(*bytes.Buffer).String(); !strings.Contains(got, "local-conflict") {
 		t.Fatalf("unexpected error: %q", got)
+	}
+}
+
+func TestDependencySatisfiedCommandFound(t *testing.T) {
+	bin := t.TempDir()
+	commandPath := filepath.Join(bin, "yc1-test-tool")
+	if err := os.WriteFile(commandPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Commands: []string{"yc1-test-tool"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected command dependency to be satisfied")
+	}
+}
+
+func TestDependencySatisfiedProbePasses(t *testing.T) {
+	bin := t.TempDir()
+	commandPath := filepath.Join(bin, "yc1-test-tool")
+	if err := os.WriteFile(commandPath, []byte("#!/bin/sh\nprintf 'yc1-test-tool 1.0\\n'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Probes: []string{commandPath + " --version"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected probe dependency to be satisfied")
+	}
+}
+
+func TestDependencySatisfiedFailedProbeFails(t *testing.T) {
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Probe: "exit 1",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected failed probe dependency to be unsatisfied")
+	}
+}
+
+func TestDependencySatisfiedFailedProbeFallsThroughToPath(t *testing.T) {
+	installedPath := filepath.Join(t.TempDir(), "installed")
+	if err := os.WriteFile(installedPath, []byte("installed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Probe: "exit 1",
+			Path:  installedPath,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected path to satisfy dependency when probe fails")
+	}
+}
+
+func TestDependencySatisfiedPathFoundWhenCommandMissing(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	installedPath := filepath.Join(t.TempDir(), "installed")
+	if err := os.WriteFile(installedPath, []byte("installed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Commands: []string{"yc1-missing-tool"},
+			Paths:    []string{installedPath},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected path dependency to be satisfied when command is missing")
+	}
+}
+
+func TestDependencySatisfiedMissingCommandAndPathFails(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Commands: []string{"yc1-missing-tool"},
+			Paths:    []string{filepath.Join(t.TempDir(), "missing")},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected missing command and path dependency to be unsatisfied")
+	}
+}
+
+func TestDependencySatisfiedLegacyCommandAndPathAreOrChecks(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	installedPath := filepath.Join(t.TempDir(), "installed")
+	if err := os.WriteFile(installedPath, []byte("installed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ok, err := dependencySatisfied(Dependency{
+		Check: DependencyCheck{
+			Command: "yc1-missing-tool",
+			Path:    installedPath,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected legacy path to satisfy dependency when legacy command is missing")
+	}
+}
+
+func TestDependencySatisfiedEmptyCheckPasses(t *testing.T) {
+	ok, err := dependencySatisfied(Dependency{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected empty dependency check to remain satisfied")
 	}
 }
 

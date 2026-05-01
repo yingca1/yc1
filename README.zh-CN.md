@@ -77,8 +77,11 @@ status/state 的标识会从 target path 派生。可以用顶层 `vars` 和 `${
 裸 `yc1 up/down/status` 会读取当前目录的 `./yc1.yml`。如果当前目录没有该文件，
 需要传 `-f` 或 `-p`。
 
-`yc1 up` 只会安装当前激活 config 所需的依赖。`yc1 down` 会移除托管配置并恢复备份，
-但不会卸载软件依赖。
+`yc1 up` 只会安装当前激活 config 所需的依赖。依赖检查会把声明的
+`command`、`commands`、`path`、`paths`、`probe`、`probes` 作为 OR 条件。
+`command` 检查 `PATH`，`path` 检查磁盘路径，`probe` 会运行一个非交互 shell 命令并要求
+成功退出，因此可以识别不是通过包管理器安装的软件。`yc1 config status` 会在 config 汇总状态
+下面打印依赖检查结果。`yc1 down` 会移除托管配置并恢复备份，但不会卸载软件依赖。
 
 ## 如何使用
 
