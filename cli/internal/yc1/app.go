@@ -25,10 +25,12 @@ import (
 )
 
 const (
-	defaultRepoURL = "https://github.com/yingca1/yc1.git"
-	githubAPIURL   = "https://api.github.com/repos/yingca1/yc1/releases/latest"
-	linkMode       = "link"
-	copyMode       = "copy"
+	defaultRepoURL             = "https://github.com/yingca1/yc1.git"
+	githubAPIURL               = "https://api.github.com/repos/yingca1/yc1/releases/latest"
+	linkMode                   = "link"
+	copyMode                   = "copy"
+	releaseAssetLookupAttempts = 12
+	releaseAssetLookupDelay    = 5 * time.Second
 )
 
 var (
@@ -1369,15 +1371,26 @@ func (a *App) runPull() error {
 	if err := a.ensureSource(); err != nil {
 		return err
 	}
-	if err := runCommand("git", "-C", a.sourceDir(), "pull", "--ff-only"); err != nil {
+	if err := syncManagedSource(a.sourceDir(), a.Out); err != nil {
 		return err
 	}
 	fmt.Fprintf(a.Out, "source: pulled %s\n", a.sourceDir())
 	return nil
 }
 
+func syncManagedSource(source string, out io.Writer) error {
+	if err := runCommand("git", "-C", source, "fetch", "--tags", "--prune", "origin"); err != nil {
+		return err
+	}
+	fmt.Fprintln(out, "source: resetting to origin/main")
+	return runCommand("git", "-C", source, "reset", "--hard", "origin/main")
+}
+
 func (a *App) runUpdate() error {
-	assetName := fmt.Sprintf("yc1_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
+	assetName, err := currentReleaseAssetName()
+	if err != nil {
+		return err
+	}
 	archiveURL, checksumURL, err := latestAssetURLs(assetName)
 	if err != nil {
 		return err
@@ -1634,24 +1647,53 @@ type releaseAsset struct {
 }
 
 func latestAssetURLs(assetName string) (string, string, error) {
+	return latestAssetURLsWithRetry(assetName, fetchLatestRelease, releaseAssetLookupAttempts, releaseAssetLookupDelay)
+}
+
+func latestAssetURLsWithRetry(assetName string, fetch func() (releaseResponse, error), attempts int, delay time.Duration) (string, string, error) {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		release, err := fetch()
+		if err != nil {
+			return "", "", err
+		}
+		archiveURL, checksumURL, err := assetURLsFromRelease(release, assetName)
+		if err == nil {
+			return archiveURL, checksumURL, nil
+		}
+		lastErr = err
+		if !isMissingReleaseAssetError(err) || attempt == attempts {
+			return "", "", err
+		}
+		if delay > 0 {
+			time.Sleep(delay)
+		}
+	}
+	return "", "", lastErr
+}
+
+func fetchLatestRelease() (releaseResponse, error) {
 	req, err := http.NewRequest(http.MethodGet, githubAPIURL, nil)
 	if err != nil {
-		return "", "", err
+		return releaseResponse{}, err
 	}
 	req.Header.Set("User-Agent", "yc1")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", err
+		return releaseResponse{}, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", "", fmt.Errorf("GitHub release lookup failed: %s", resp.Status)
+		return releaseResponse{}, fmt.Errorf("GitHub release lookup failed: %s", resp.Status)
 	}
 	var release releaseResponse
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", "", err
+		return releaseResponse{}, err
 	}
-	return assetURLsFromRelease(release, assetName)
+	return release, nil
 }
 
 func assetURLsFromRelease(release releaseResponse, assetName string) (string, string, error) {
@@ -1665,12 +1707,42 @@ func assetURLsFromRelease(release releaseResponse, assetName string) (string, st
 		}
 	}
 	if archiveURL == "" {
-		return "", "", fmt.Errorf("release asset %s not found", assetName)
+		return "", "", &missingReleaseAssetError{name: assetName}
 	}
 	if checksumURL == "" {
-		return "", "", fmt.Errorf("release checksum %s.sha256 not found", assetName)
+		return "", "", &missingReleaseAssetError{name: assetName + ".sha256"}
 	}
 	return archiveURL, checksumURL, nil
+}
+
+type missingReleaseAssetError struct {
+	name string
+}
+
+func (e *missingReleaseAssetError) Error() string {
+	if strings.HasSuffix(e.name, ".sha256") {
+		return fmt.Sprintf("release checksum %s not found", e.name)
+	}
+	return fmt.Sprintf("release asset %s not found", e.name)
+}
+
+func isMissingReleaseAssetError(err error) bool {
+	var missing *missingReleaseAssetError
+	return errors.As(err, &missing)
+}
+
+func currentReleaseAssetName() (string, error) {
+	switch runtime.GOOS {
+	case "darwin", "linux":
+	default:
+		return "", fmt.Errorf("update is not supported on %s", runtime.GOOS)
+	}
+	switch runtime.GOARCH {
+	case "amd64", "arm64":
+	default:
+		return "", fmt.Errorf("update is not supported on %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+	return fmt.Sprintf("yc1_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH), nil
 }
 
 func downloadBytes(url string) ([]byte, error) {

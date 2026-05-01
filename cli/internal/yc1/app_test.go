@@ -177,6 +177,35 @@ EOF
 	}
 }
 
+func TestSyncManagedSourceResetsToOriginMain(t *testing.T) {
+	bin, logPath := writeFakeGit(t, `#!/bin/sh
+set -eu
+if [ "$1" = "-C" ]; then
+  shift 2
+fi
+printf '%s\n' "$*" >> "$YC1_GIT_LOG"
+case "$1" in
+  fetch) exit 0 ;;
+  reset) exit 0 ;;
+  *) exit 2 ;;
+esac
+`)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("YC1_GIT_LOG", logPath)
+
+	var out bytes.Buffer
+	if err := syncManagedSource(t.TempDir(), &out); err != nil {
+		t.Fatal(err)
+	}
+	log := readFile(t, logPath)
+	if !strings.Contains(log, "reset --hard origin/main") {
+		t.Fatalf("expected reset to origin/main, got log:\n%s", log)
+	}
+	if !strings.Contains(out.String(), "resetting to origin/main") {
+		t.Fatalf("expected reset message, got %q", out.String())
+	}
+}
+
 func TestTopLevelRequiresProfileWhenNoLocalFile(t *testing.T) {
 	app, _ := newTestApp(t)
 	cwd := t.TempDir()
@@ -788,6 +817,50 @@ func TestAssetURLsFromRelease(t *testing.T) {
 	}
 }
 
+func TestLatestAssetURLsRetriesMissingAsset(t *testing.T) {
+	const assetName = "yc1_darwin_arm64.tar.gz"
+	calls := 0
+	archive, checksum, err := latestAssetURLsWithRetry(assetName, func() (releaseResponse, error) {
+		calls++
+		if calls == 1 {
+			return releaseResponse{}, nil
+		}
+		return releaseResponse{Assets: []releaseAsset{
+			{Name: assetName, BrowserDownloadURL: "https://example.test/archive"},
+			{Name: assetName + ".sha256", BrowserDownloadURL: "https://example.test/checksum"},
+		}}, nil
+	}, 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 {
+		t.Fatalf("expected 2 release lookups, got %d", calls)
+	}
+	if archive != "https://example.test/archive" || checksum != "https://example.test/checksum" {
+		t.Fatalf("unexpected URLs: %q %q", archive, checksum)
+	}
+}
+
+func TestLatestAssetURLsRetriesMissingChecksum(t *testing.T) {
+	const assetName = "yc1_darwin_arm64.tar.gz"
+	calls := 0
+	_, _, err := latestAssetURLsWithRetry(assetName, func() (releaseResponse, error) {
+		calls++
+		return releaseResponse{Assets: []releaseAsset{
+			{Name: assetName, BrowserDownloadURL: "https://example.test/archive"},
+		}}, nil
+	}, 3, 0)
+	if err == nil {
+		t.Fatal("expected missing checksum error")
+	}
+	if calls != 3 {
+		t.Fatalf("expected 3 release lookups, got %d", calls)
+	}
+	if got, want := err.Error(), "release checksum yc1_darwin_arm64.tar.gz.sha256 not found"; got != want {
+		t.Fatalf("unexpected error %q, want %q", got, want)
+	}
+}
+
 func TestExtractYc1Binary(t *testing.T) {
 	var buffer bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buffer)
@@ -871,6 +944,29 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeFakeGit(t *testing.T, script string) (string, string) {
+	t.Helper()
+	temp := t.TempDir()
+	bin := filepath.Join(temp, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitPath := filepath.Join(bin, "git")
+	if err := os.WriteFile(gitPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin, filepath.Join(temp, "git.log")
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func withCwd(t *testing.T, dir string) {
