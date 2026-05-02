@@ -1,0 +1,64 @@
+# Neovim configuration based on LazyVim starter.
+name: neovim
+description: Neovim configuration based on LazyVim starter
+files:
+  - source: init.lua
+    target: ~/.config/nvim/init.lua
+  - source: .neoconf.json
+    target: ~/.config/nvim/.neoconf.json
+  - source: .gitignore
+    target: ~/.config/nvim/.gitignore
+  - source: stylua.toml
+    target: ~/.config/nvim/stylua.toml
+  - source: lua/config/autocmds.lua
+    target: ~/.config/nvim/lua/config/autocmds.lua
+  - source: lua/config/keymaps.lua
+    target: ~/.config/nvim/lua/config/keymaps.lua
+  - source: lua/config/lazy.lua
+    target: ~/.config/nvim/lua/config/lazy.lua
+  - source: lua/config/options.lua
+    target: ~/.config/nvim/lua/config/options.lua
+  - source: lua/plugins/example.lua
+    target: ~/.config/nvim/lua/plugins/example.lua
+dependencies:
+  - name: neovim
+    check:
+      probe: nvim --version | awk 'NR == 1 { sub(/^v/, "", $2); split($2, v, "."); exit !((v[1] + 0 > 0) || (v[1] + 0 == 0 && (v[2] + 0 > 11 || (v[2] + 0 == 11 && v[3] + 0 >= 2)))) }'
+    install:
+      darwin: brew install neovim
+      linux: sudo apt-get update && sudo apt-get install -y neovim
+  - name: git
+    check:
+      command: git
+    install:
+      darwin: brew install git
+      linux: sudo apt-get update && sudo apt-get install -y git
+  - name: ripgrep
+    check:
+      command: rg
+    install:
+      darwin: brew install ripgrep
+      linux: sudo apt-get update && sudo apt-get install -y ripgrep
+  - name: fd
+    check:
+      commands:
+        - fd
+        - fdfind
+    install:
+      darwin: brew install fd
+      linux: sudo apt-get update && sudo apt-get install -y fd-find
+  - name: fzf
+    check:
+      command: fzf
+    install:
+      darwin: brew install fzf
+      linux: sudo apt-get update && sudo apt-get install -y fzf
+  - name: c-compiler
+    check:
+      probes:
+        - cc --version
+        - gcc --version
+        - clang --version
+    install:
+      darwin: xcode-select --install
+      linux: sudo apt-get update && sudo apt-get install -y build-essential

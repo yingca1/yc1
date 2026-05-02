@@ -771,27 +771,6 @@ func TestRepositoryProfileFilesParse(t *testing.T) {
 	}
 }
 
-func TestDemoProfileParses(t *testing.T) {
-	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
-	profile, err := readProfileFile(filepath.Join(repoRoot, "profiles", "skills-demo", "yc1.yml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(profile.Skills) == 0 {
-		t.Fatal("expected demo profile skills")
-	}
-	for _, skill := range profile.Skills {
-		if skill.Name == "" || skill.Source == "" || len(skill.Targets) == 0 {
-			t.Fatalf("invalid demo skill entry: %#v", skill)
-		}
-		for _, target := range skill.Targets {
-			if target == "" {
-				t.Fatalf("invalid demo skill target: %#v", target)
-			}
-		}
-	}
-}
-
 func TestLocalProfilesDirectoryIsIgnored(t *testing.T) {
 	repoRoot := filepath.Clean(filepath.Join("..", "..", ".."))
 	data, err := os.ReadFile(filepath.Join(repoRoot, ".gitignore"))

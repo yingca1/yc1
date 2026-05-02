@@ -31,6 +31,7 @@ yc1 up -p default       # install the built-in default profile
 yc1 up -p minimal       # install git/curl/wget only
 yc1 up -f yc1.yml       # install configs and skills from a profile file
 yc1 config up vim       # install selected config resources
+yc1 config up neovim    # install LazyVim-backed Neovim config
 yc1 config up vim --copy
 yc1 skill up my-skill   # link a skill declared in ./yc1.yml
 yc1 status -f yc1.yml
@@ -38,8 +39,8 @@ yc1 pull                # update ~/.config/yc1/source
 yc1 update              # update the yc1 binary from GitHub Releases
 ```
 
-Configs are organized by tool: `zsh`, `vim`, `tmux`, `kitty`, `git`, `curl`, and
-`wget`.
+Configs are organized by tool: `zsh`, `vim`, `neovim`, `tmux`, `kitty`, `git`,
+`curl`, and `wget`.
 
 Each config is driven by a `configs/<name>/yc1.yml` manifest. YAML is used so notes and
 comments can live next to file mappings, OS-specific targets, and dependency
@@ -118,7 +119,7 @@ The `kitty` config writes:
 - `~/.config/kitty/kitty.conf`
 - `~/.config/kitty/current-theme.conf`
 
-The default profile is tuned for tmux + vim + zsh:
+The default profile is tuned for tmux + vim/neovim + zsh:
 
 - `JetBrainsMonoNL Nerd Font Mono` at 15pt
 - `xterm-kitty` with kitty shell integration enabled
@@ -126,6 +127,27 @@ The default profile is tuned for tmux + vim + zsh:
 - `Cmd+C`/`Cmd+V` use the macOS clipboard
 - `Cmd+T`, `Cmd+Enter`, and `Cmd+\` provide light kitty tab/window/split controls while tmux remains the main multiplexer
 - Catppuccin Mocha is isolated in `current-theme.conf` so themes can be swapped without touching keybindings
+
+### neovim
+
+The `neovim` config writes a LazyVim starter-based setup to `~/.config/nvim`:
+
+- `init.lua`
+- `.neoconf.json`
+- `.gitignore`
+- `stylua.toml`
+- `lua/config/*.lua`
+- `lua/plugins/example.lua`
+
+`yc1 up -p default` includes this config. You can also install it directly:
+
+```bash
+yc1 config up neovim
+```
+
+LazyVim bootstraps `lazy.nvim` the first time `nvim` starts. The manifest checks
+for Neovim 0.11.2 or newer, Git, ripgrep, fd, fzf, and a C compiler for
+Treesitter.
 
 ### vim
 

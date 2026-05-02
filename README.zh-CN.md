@@ -28,6 +28,7 @@ yc1 up -p default       # 安装内置 default profile
 yc1 up -p minimal       # 只安装 git/curl/wget
 yc1 up -f yc1.yml       # 从 profile 文件安装 configs 和 skills
 yc1 config up vim       # 安装指定 config
+yc1 config up neovim    # 安装基于 LazyVim 的 Neovim 配置
 yc1 config up vim --copy
 yc1 skill up my-skill   # 链接 ./yc1.yml 中声明的 skill
 yc1 status -f yc1.yml
@@ -35,7 +36,7 @@ yc1 pull                # 更新 ~/.config/yc1/source
 yc1 update              # 从 GitHub Releases 更新 yc1 二进制
 ```
 
-configs 按工具组织：`zsh`、`vim`、`tmux`、`kitty`、`git`、`curl`、`wget`。
+configs 按工具组织：`zsh`、`vim`、`neovim`、`tmux`、`kitty`、`git`、`curl`、`wget`。
 
 每个 config 由 `configs/<name>/yc1.yml` manifest 驱动。使用 YAML 是为了能把说明和注释
 直接写在文件映射、OS 条件和依赖命令旁边。
@@ -108,7 +109,7 @@ status/state 的标识会从 target path 派生。可以用顶层 `vars` 和 `${
 - `~/.config/kitty/kitty.conf`
 - `~/.config/kitty/current-theme.conf`
 
-默认配置针对 tmux + vim + zsh：
+默认配置针对 tmux + vim/neovim + zsh：
 
 - 使用 `JetBrainsMonoNL Nerd Font Mono`，字号 15pt
 - 使用 `xterm-kitty`，并启用 kitty shell integration
@@ -116,6 +117,26 @@ status/state 的标识会从 target path 派生。可以用顶层 `vars` 和 `${
 - `Cmd+C`/`Cmd+V` 使用 macOS 剪贴板
 - `Cmd+T`、`Cmd+Enter`、`Cmd+\` 提供轻量的 kitty tab/window/split 控制，主分屏仍交给 tmux
 - Catppuccin Mocha 主题放在 `current-theme.conf`，换主题时不用改快捷键
+
+### neovim
+
+`neovim` config 会把基于 LazyVim starter 的配置写入 `~/.config/nvim`：
+
+- `init.lua`
+- `.neoconf.json`
+- `.gitignore`
+- `stylua.toml`
+- `lua/config/*.lua`
+- `lua/plugins/example.lua`
+
+`yc1 up -p default` 会包含这个 config，也可以单独安装：
+
+```bash
+yc1 config up neovim
+```
+
+LazyVim 会在首次启动 `nvim` 时自动 bootstrap `lazy.nvim`。manifest 会检查
+Neovim 0.11.2 或更新版本、Git、ripgrep、fd、fzf，以及 Treesitter 需要的 C 编译器。
 
 ### vim
 

@@ -5,6 +5,7 @@ configs:
   - curl
   - git
   - kitty
+  - neovim
   - tmux
   - vim
   - wget
